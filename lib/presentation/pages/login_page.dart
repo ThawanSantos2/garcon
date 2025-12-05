@@ -77,7 +77,7 @@ class _LoginPageState extends State<LoginPage> {
 
         // Navegar para home baseado no role
         if (mounted) {
-          Navigator.pushReplacementNamed(context, '/home');
+          Navigator.pushReplacementNamed(context, '/home/$_selectedRole');
         }
       }
     } on FirebaseAuthException catch (e) {

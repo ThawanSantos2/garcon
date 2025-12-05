@@ -6,6 +6,10 @@ import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import './presentation/config/theme_config.dart';
 import 'presentation/pages/splash_page.dart';
+import 'presentation/pages/login_page.dart'; // Importe as páginas
+import 'presentation/pages/client_home_page.dart';
+import 'presentation/pages/owner_home_page.dart';
+import 'presentation/pages/waiter_home_page.dart';
 import 'services/auth_service.dart';
 import 'services/firebase_service.dart';
 
@@ -37,7 +41,19 @@ class MyApp extends StatelessWidget {
         theme: GarconTheme.lightTheme,
         darkTheme: GarconTheme.darkTheme,
         themeMode: ThemeMode.system,
-        home: const SplashPage(),
+        initialRoute: '/',  // Inicia na splash
+        routes: {
+          '/': (context) => const SplashPage(),
+          '/login': (context) => const LoginPage(),
+          '/home/client': (context) => const ClientHomePage(),
+          '/home/garcom': (context) => const WaiterHomePage(),  // 'garcom' no código é 'garcom'
+          '/home/estabelecimento': (context) => const OwnerHomePage(),
+        },
+        onUnknownRoute: (settings) => MaterialPageRoute(
+          builder: (context) => const Scaffold(
+            body: Center(child: Text('Página não encontrada')),
+          ),
+        ),
       ),
     );
   }
@@ -53,9 +69,15 @@ class AuthProvider extends ChangeNotifier {
   String? get userRole => _userRole;
 
   Future<void> checkAuthStatus() async {
-    // Check if user is logged in
     final authService = AuthService();
     _isAuthenticated = authService.isUserLoggedIn();
+
+    if (_isAuthenticated) {
+      _userId = authService.getCurrentUserId();
+      final userData = await authService.getUserData(_userId!);
+      _userRole = userData?['role'];  // Carrega o role do Firestore
+    }
+
     notifyListeners();
   }
 

@@ -37,11 +37,11 @@ class _SplashPageState extends State<SplashPage>
 
     if (!mounted) return;
 
-    if (authProvider.isAuthenticated) {
-      // Navigate to home based on role
-      Navigator.of(context).pushReplacementNamed('/home');
+    if (authProvider.isAuthenticated && authProvider.userRole != null) {
+      // Navega para a home baseada no role
+      Navigator.of(context).pushReplacementNamed('/home/${authProvider.userRole}');
     } else {
-      // Navigate to login
+      // Vai para login
       Navigator.of(context).pushReplacementNamed('/login');
     }
   }
