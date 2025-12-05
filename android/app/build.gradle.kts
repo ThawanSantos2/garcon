@@ -1,15 +1,13 @@
 plugins {
     id("com.android.application")
-    // START: FlutterFire Configuration
-    id("com.google.gms.google-services")
-    // END: FlutterFire Configuration
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    // O plugin do Google Services já está sendo aplicado via FlutterFire CLI
+    // Não precisa declarar aqui de novo
 }
 
 android {
-    namespace = "com.example.garcon"
+    namespace = "com.example.garcon"  // mude se o seu package for diferente
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -19,14 +17,11 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+        jvmTarget = "17"  // <- forma correta no .kts (sem JavaVersion.toString())
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.garcon"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -35,26 +30,27 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
-
-    dependencies {
-    implementation platform('com.google.firebase:firebase-bom:32.7.0')
-    implementation 'com.google.firebase:firebase-core'
-    implementation 'com.google.firebase:firebase-auth'
-    implementation 'com.google.firebase:firebase-firestore'
-    implementation 'com.google.firebase:firebase-messaging'
-    implementation 'com.google.firebase:firebase-storage'
-    
-    // Google Play Billing
-    implementation 'com.android.billingclient:billing:6.1.0'
-    }
-
-    apply plugin: 'com.google.gms.google-services'
 }
+
+dependencies {
+    // Firebase BoM (sempre use a versão mais recente)
+    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
+    implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-messaging")
+    implementation("com.google.firebase:firebase-storage")
+
+    // Google Play Billing (versão estável e compatível com in_app_purchase 5+)
+    implementation("com.android.billingclient:billing:6.2.1")
+}
+
+// O plugin do Google Services é aplicado automaticamente pelo FlutterFire
+// Se você NÃO precisa (e nem deve) colocar "apply plugin" aqui quando usa .kts
+// Ele já está no bloco plugins lá em cima graças ao FlutterFire CLI
 
 flutter {
     source = "../.."
