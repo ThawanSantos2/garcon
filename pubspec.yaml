@@ -32,9 +32,6 @@ dependencies:
   in_app_purchase_android: ^0.3.4+5
   in_app_purchase_storekit: ^0.3.11+1
 
-  # Phone Auth & SMS
-  flutter_sms: ^2.3.3
-
   # UI/UX
   google_fonts: ^6.1.0
   shimmer: ^3.0.0
@@ -86,13 +83,11 @@ flutter:
   fonts:
     - family: Poppins
       fonts:
-        - asset: assets/fonts/Poppins-Regular.ttf
         - asset: assets/fonts/Poppins-Bold.ttf
           weight: 700
         - asset: assets/fonts/Poppins-SemiBold.ttf
           weight: 600
     - family: InterTight
       fonts:
-        - asset: assets/fonts/InterTight-Regular.ttf
         - asset: assets/fonts/InterTight-Bold.ttf
           weight: 700

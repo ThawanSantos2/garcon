@@ -12,9 +12,11 @@ const messaging = admin.messaging();
 
 // Configurações globais recomendadas para v2
 setGlobalOptions({
-  maxInstances: 100,
-  region: 'southamerica-east1', // ou sua região preferida
+  region: 'us-central1',     // região com quota alta quota
+  maxInstances: 10,          // 10 é mais que suficiente para seu app
   memory: '256MiB',
+  timeoutSeconds: 120,
+  cpu: 1,
 });
 
 // ================================================================
@@ -115,7 +117,7 @@ exports.updateStatsOnOrderCompletion = onDocumentUpdated('orders/{orderId}', asy
 exports.checkExpiredSubscriptions = onSchedule({
   schedule: '0 0 * * *',
   timeZone: 'America/Sao_Paulo',
-  region: 'southamerica-east1',
+  region: 'us-central1',
 }, async () => {
   try {
     const now = new Date();
@@ -221,7 +223,7 @@ exports.notifyOnWaiterAlert = onDocumentCreated('waiter_alerts/{alertId}', async
 // ================================================================
 
 exports.handlePaymentWebhook = onRequest({
-  region: 'southamerica-east1',
+  region: 'us-central1',
   cors: true,
 }, async (req, res) => {
   try {
@@ -272,7 +274,7 @@ exports.handlePaymentWebhook = onRequest({
 exports.cleanupOldData = onSchedule({
   schedule: '0 2 * * 0',
   timeZone: 'America/Sao_Paulo',
-  region: 'southamerica-east1',
+  region: 'us-central1',
 }, async () => {
   try {
     console.log('Executando limpeza semanal de dados antigos...');
