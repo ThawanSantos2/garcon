@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1053604861458",
+    "project_id": "garcon-de615",
+    "storage_bucket": "garcon-de615.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1053604861458:android:e387c0f854fb705ad42acb",
+        "android_client_info": {
+          "package_name": "com.example.garcon"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCrUDfUQkvOImbCuoij0MaZKGlXGkyrpxs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
