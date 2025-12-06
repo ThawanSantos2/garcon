@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -14,6 +15,48 @@ class AuthService {
   }
 
   // ==========================================
+  // LOGIN COM E-MAIL E SENHA
+  // ==========================================
+
+  Future<UserCredential> loginWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final userCredential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      // Salvar sessão por 7 dias
+      await _saveLoginSession(userCredential.user!.uid);
+
+      return userCredential;
+    } on FirebaseAuthException catch (e) {
+      throw Exception('Erro de login: ${e.message}');
+    }
+  }
+
+  // ==========================================
+  // CADASTRO COM E-MAIL E SENHA
+  // ==========================================
+
+  Future<UserCredential> registerWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final userCredential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      return userCredential;
+    } on FirebaseAuthException catch (e) {
+      throw Exception('Erro ao registrar: ${e.message}');
+    }
+  }
+
+  // ==========================================
   // AUTENTICAÇÃO COM SMS (FIREBASE NATIVO)
   // ==========================================
 
@@ -24,7 +67,6 @@ class AuthService {
     required Function(PhoneAuthCredential) onVerificationCompleted,
   }) async {
     try {
-      // Formata o número para E.164 (+55 DDD número)
       String formattedPhone = _formatPhoneNumber(phoneNumber);
 
       await _auth.verifyPhoneNumber(
@@ -32,9 +74,7 @@ class AuthService {
         verificationCompleted: onVerificationCompleted,
         verificationFailed: onVerificationFailed,
         codeSent: onCodeSent,
-        codeAutoRetrievalTimeout: (String verificationId) {
-          // Timeout automático
-        },
+        codeAutoRetrievalTimeout: (String verificationId) {},
         timeout: const Duration(seconds: 60),
       );
     } catch (e) {
@@ -51,6 +91,10 @@ class AuthService {
   ) async {
     try {
       final userCredential = await _auth.signInWithCredential(credential);
+      
+      // Salvar sessão por 7 dias
+      await _saveLoginSession(userCredential.user!.uid);
+      
       return userCredential;
     } catch (e) {
       throw Exception('Erro ao fazer login: $e');
@@ -65,7 +109,7 @@ class AuthService {
     required String userId,
     required String name,
     required String email,
-    required String role, // cliente, garcom, estabelecimento
+    required String role,
     required String? establishmentId,
   }) async {
     try {
@@ -86,11 +130,62 @@ class AuthService {
   }
 
   // ==========================================
+  // RECUPERAR SENHA
+  // ==========================================
+
+  Future<void> resetPassword(String email) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+    } on FirebaseAuthException catch (e) {
+      throw Exception('Erro ao enviar reset: ${e.message}');
+    }
+  }
+
+  // ==========================================
+  // SALVAR SESSÃO (7 DIAS)
+  // ==========================================
+
+  Future<void> _saveLoginSession(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final expirationTime = DateTime.now().add(const Duration(days: 7));
+
+      await prefs.setString('last_user_id', userId);
+      await prefs.setString('session_expiration', expirationTime.toIso8601String());
+    } catch (e) {
+      // Falha silenciosa - login continua funcionando
+    }
+  }
+
+  // ==========================================
+  // VERIFICAR SESSÃO VÁLIDA
+  // ==========================================
+
+  Future<bool> isSessionValid() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final expirationString = prefs.getString('session_expiration');
+
+      if (expirationString == null) {
+        return false;
+      }
+
+      final expiration = DateTime.parse(expirationString);
+      return DateTime.now().isBefore(expiration);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // ==========================================
   // LOGOUT
   // ==========================================
 
   Future<void> signOut() async {
     try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('last_user_id');
+      await prefs.remove('session_expiration');
       await _auth.signOut();
     } catch (e) {
       throw Exception('Erro ao fazer logout: $e');
@@ -108,15 +203,12 @@ class AuthService {
   // ==========================================
 
   String _formatPhoneNumber(String phone) {
-    // Remove caracteres especiais
     String digits = phone.replaceAll(RegExp(r'\D'), '');
-    
-    // Se não começar com 55, adiciona
+
     if (!digits.startsWith('55')) {
       digits = '55$digits';
     }
-    
-    // Adiciona o +
+
     return '+$digits';
   }
 
@@ -140,6 +232,36 @@ class AuthService {
       return result.docs.isNotEmpty;
     } catch (e) {
       return false;
+    }
+  }
+
+  // Encontrar usuário por email (para recuperação de senha)
+  Future<String?> findUserByEmail(String email) async {
+    try {
+      final result = await _firestore
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .get();
+
+      if (result.docs.isNotEmpty) {
+        return result.docs.first.id;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Atualizar dados do usuário
+  Future<void> updateUserData(
+    String userId,
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      data['updatedAt'] = FieldValue.serverTimestamp();
+      await _firestore.collection('users').doc(userId).update(data);
+    } catch (e) {
+      throw Exception('Erro ao atualizar dados: $e');
     }
   }
 }

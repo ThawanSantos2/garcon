@@ -1,14 +1,14 @@
 class Formatters {
-  static String formatCurrency(double value) {
-    return 'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
-  }
-
-  static String formatPhoneNumber(String phone) {
-    String digits = phone.replaceAll(RegExp(r'\D'), '');
+  static String formatPhone(String phone) {
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
     if (digits.length == 11) {
       return '(${digits.substring(0, 2)}) ${digits.substring(2, 7)}-${digits.substring(7)}';
     }
     return phone;
+  }
+
+  static String formatCurrency(double value) {
+    return 'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
   }
 
   static String formatTime(Duration duration) {
