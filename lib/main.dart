@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import './presentation/config/theme_config.dart';
@@ -13,6 +14,7 @@ import './presentation/pages/client_home_page.dart';
 import './presentation/pages/waiter_home_page.dart';
 import 'services/auth_service.dart';
 import 'services/firebase_service.dart';
+import './presentation/pages/splash_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,6 +24,40 @@ void main() async {
   );
   
   runApp(const MyApp());
+}
+
+class AuthProvider extends ChangeNotifier {
+  bool _isAuthenticated = false;
+  String? _userId;
+  String? _userRole;
+
+  bool get isAuthenticated => _isAuthenticated;
+  String? get userId => _userId;
+  String? get userRole => _userRole;
+
+  Future<void> checkAuthStatus() async {
+    final authService = AuthService();
+    _isAuthenticated = authService.isUserLoggedIn();
+
+    if (_isAuthenticated) {
+      _userId = authService.getCurrentUserId();
+      final userData = await authService.getUserData(_userId!);
+      _userRole = userData?['role'];
+    } else {
+      _userId = null;
+      _userRole = null;
+    }
+
+    notifyListeners();
+  }
+
+  Future<void> logout() async {
+    await AuthService().signOut();
+    _isAuthenticated = false;
+    _userId = null;
+    _userRole = null;
+    notifyListeners();
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -35,85 +71,18 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         brightness: Brightness.dark,
       ),
-      home: const WelcomePage(),
+      initialRoute: '/',  // Inicia na splash
       routes: {
+        '/': (context) => const SplashPage(),
         '/welcome': (context) => const WelcomePage(),
         '/login': (context) => const LoginPageImproved(),
         '/register': (context) => const RegisterPage(),
-        '/home': (context) => _buildHomeScreen(context),
+        '/home/cliente': (context) => const ClientHomePage(),
+        '/home/garcom': (context) => const WaiterHomePage(),
+        '/home/estabelecimento': (context) => const OwnerHomePageImproved(),
+        '/home': (context) => const WelcomePage(), // ou uma tela de erro
       },
+      debugShowCheckedModeBanner: false,
     );
-  }
-
-  Widget _buildHomeScreen(BuildContext context) {
-    return FutureBuilder<Map<String, dynamic>?>(
-      future: _getUserData(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
-          );
-        }
-
-        final userData = snapshot.data;
-        final role = userData?['role'] as String?;
-
-        switch (role) {
-          case 'estabelecimento':
-            return const OwnerHomePageImproved();
-          case 'garcom':
-            return const WaiterHomePage(); // Você vai criar isso
-          case 'cliente':
-            return const ClientHomePage(); // Você vai criar isso
-          default:
-            return const LoginPageImproved();
-        }
-      },
-    );
-  }
-
-  Future<Map<String, dynamic>?> _getUserData() async {
-    final authService = AuthService();
-    final userId = authService.getCurrentUserId();
-    
-    if (userId == null) return null;
-    
-    try {
-      return await authService.getUserData(userId);
-    } catch (e) {
-      return null;
-    }
-  }
-}
-
-class AuthProvider extends ChangeNotifier {
-  bool _isAuthenticated = false;
-  String? _userId;
-  String? _userRole; // cliente, garcom, estabelecimento
-
-  bool get isAuthenticated => _isAuthenticated;
-  String? get userId => _userId;
-  String? get userRole => _userRole;
-
-  Future<void> checkAuthStatus() async {
-    final authService = AuthService();
-    _isAuthenticated = authService.isUserLoggedIn();
-
-    if (_isAuthenticated) {
-      _userId = authService.getCurrentUserId();
-      final userData = await authService.getUserData(_userId!);
-      _userRole = userData?['role'];  // Carrega o role do Firestore
-    }
-
-    notifyListeners();
-  }
-
-  Future<void> logout() async {
-    _isAuthenticated = false;
-    _userId = null;
-    _userRole = null;
-    notifyListeners();
   }
 }

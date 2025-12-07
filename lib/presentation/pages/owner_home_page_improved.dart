@@ -1,11 +1,17 @@
-// ignore_for_file: use_super_parameters, unnecessary_to_list_in_spreads
+// ignore_for_file: use_super_parameters, unnecessary_to_list_in_spreads, unused_import, deprecated_member_use, unnecessary_nullable_for_final_variable_declarations
 
+import 'dart:io';
+import 'package:photo_manager/photo_manager.dart';  //
 import 'package:flutter/material.dart';
+import '../../services/auth_service.dart';  // ← Adicione isso
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../config/theme_config.dart';
 import '../../services/firebase_service.dart';
+import 'package:mobile_scanner/mobile_scanner.dart'; // Novo import// Novo import
+import 'package:path_provider/path_provider.dart'; // Novo import
+import 'package:image/image.dart' as img_lib; // Novo import (from image package)
 
 class OwnerHomePageImproved extends StatefulWidget {
   const OwnerHomePageImproved({Key? key}) : super(key: key);
@@ -32,26 +38,66 @@ class _OwnerHomePageImprovedState extends State<OwnerHomePageImproved>
     _initializeData();
   }
 
-  Future<void> _initializeData() async {
-    try {
-      final userId = _auth.currentUser?.uid;
-      if (userId == null) return;
+Future<void> _initializeData() async {
+  if (!mounted) return;
 
-      // Obter dados do estabelecimento
-      final userData = await _firebaseService.getUserData(userId);
-      if (userData != null && userData['establishmentId'] != null) {
-        setState(() => _establishmentId = userData['establishmentId']);
-        final estData =
-            await _firebaseService.getEstablishmentData(_establishmentId);
-        setState(() {
-          _establishmentData = estData;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
+  setState(() => _isLoading = true);
+
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _goToWelcome();
+      return;
+    }
+
+    // Pega os dados do usuário dono
+    final userData = await _firebaseService.getUserData(user.uid);
+
+    // Verifica se tem establishmentId
+    final String? estId = userData?['establishmentId'] as String?;
+
+    if (estId == null || estId.isEmpty) {
+      debugPrint('ERRO: establishmentId não encontrado no usuário ${user.uid}');
+      debugPrint('Dados do usuário: $userData');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Erro: estabelecimento não configurado. Contate o suporte.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      _goToWelcome();
+      return;
+    }
+
+    // Tudo certo → busca os dados do estabelecimento
+    final estData = await _firebaseService.getEstablishmentData(estId);
+
+    if (!mounted) return;
+
+    setState(() {
+      _establishmentId = estId;
+      _establishmentData = estData;
+      _isLoading = false;
+    });
+  } catch (e) {
+    debugPrint('Erro ao carregar dados do estabelecimento: $e');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro: $e')),
+      );
+      _goToWelcome();
     }
   }
+}
+
+void _goToWelcome() {
+  if (mounted) {
+    Navigator.pushNamedAndRemoveUntil(context, '/welcome', (route) => false);
+  }
+}
+
+final _authService = AuthService();
 
   @override
   void dispose() {
@@ -350,77 +396,202 @@ class _OwnerHomePageImprovedState extends State<OwnerHomePageImproved>
     );
   }
 
-  void _showQRCodeDialog(String qrData, String tableName) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('QR Code - $tableName'),
-        content: Column(
+void _showQRCodeDialog(String qrData, String tableName) {
+  showDialog(
+    context: context,
+    builder: (context) => Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(20),
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1a1a1a),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white30),
+        ),
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            QrImageView(
-              data: qrData,
-              version: QrVersions.auto,
-              size: 250,
-              backgroundColor: Colors.white,
+            Text(
+              'QR Code - $tableName',
+              style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: QrImageView(
+                data: qrData,
+                version: QrVersions.auto,
+                size: 280,
+                backgroundColor: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Fechar', style: TextStyle(color: Colors.white70)),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    await _saveQRCodeToGallery(qrData, tableName);
+                    if (!context.mounted) return;
+                    Navigator.pop(context);
+                  },
+                  icon: const Icon(Icons.download),
+                  label: const Text('Baixar'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF0047AB),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Fechar'),
-          ),
-          ElevatedButton.icon(
-            onPressed: () {
-              // Download de imagem
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('QR Code salvo na galeria')),
-              );
-            },
-            icon: const Icon(Icons.download),
-            label: const Text('Baixar'),
-          ),
-        ],
+      ),
+    ),
+  );
+}
+
+Future<void> _saveQRCodeToGallery(String qrData, String tableName) async {
+  try {
+    // 1. Pede permissão para salvar na galeria
+    final PermissionState ps = await PhotoManager.requestPermissionExtend();
+    if (ps != PermissionState.authorized && ps != PermissionState.limited) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Permissão para salvar imagens negada. Vá em Configurações > Apps > Garçon > Permissões.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // 2. Gera a imagem do QR Code como Uint8List
+    final qrValidationResult = QrValidator.validate(qrData);
+    final qrCode = qrValidationResult.qrCode!;
+    final painter = QrPainter.withQr(
+      qr: qrCode,
+      // Nota: 'color' e 'emptyColor' são depreciados - use eyeStyle/dataModuleStyle se precisar customizar
+      color: const Color(0xFF000000),
+      emptyColor: Colors.white,
+      gapless: true,
+    );
+
+    final picData = await painter.toImageData(500);  // 500x500 pixels
+    final buffer = picData!.buffer.asUint8List();  // Uint8List pronto
+
+    // 3. Salva na galeria com nome bonito
+    final AssetEntity? entity = await PhotoManager.editor.saveImage(
+      data: buffer,                // ← obrigatório
+      filename: 'QR_$tableName.png', // ← obrigatório
+      title: 'QR Code Mesa $tableName',
+      desc: 'QR Code da mesa $tableName - Garçon App',
+    );
+
+
+    if (entity != null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('QR Code salvo na galeria!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      throw Exception('Falha ao salvar - verifique as permissões');
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Erro ao salvar: $e'),
+        backgroundColor: Colors.red,
       ),
     );
   }
+}
 
   // ==========================================
   // TAB: PEDIDOS
   // ==========================================
 
-  Widget _buildOrdersTab() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('orders')
-          .where('establishmentId', isEqualTo: _establishmentId)
-          .where('createdAt',
-              isGreaterThan: Timestamp.fromDate(
-                  DateTime.now().subtract(const Duration(hours: 5))))
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Center(
-            child: CircularProgressIndicator(color: Colors.white),
-          );
-        }
-
-        final orders = snapshot.data!.docs;
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: orders.length,
-          itemBuilder: (context, index) {
-            final order = orders[index].data() as Map<String, dynamic>;
-            return _buildOrderCard(order, orders[index].id);
-          },
+Widget _buildOrdersTab() {
+  return StreamBuilder<QuerySnapshot>(
+    stream: _firestore
+        .collection('orders')
+        .where('establishmentId', isEqualTo: _establishmentId)
+        .orderBy('createdAt', descending: true)
+        .limit(50) // Limite para performance
+        .snapshots(),
+    builder: (context, snapshot) {
+      if (snapshot.hasError) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.red, size: 60),
+              const SizedBox(height: 16),
+              const Text(
+                'Erro ao carregar pedidos',
+                style: TextStyle(color: Colors.white70),
+              ),
+              Text(
+                snapshot.error.toString(),
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         );
-      },
-    );
-  }
+      }
+
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return const Center(child: CircularProgressIndicator(color: Colors.white));
+      }
+
+      final orders = snapshot.data!.docs;
+
+      if (orders.isEmpty) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.receipt_long_outlined, size: 80, color: Colors.white.withValues(alpha: 0.3)),
+              const SizedBox(height: 24),
+              const Text(
+                'Nenhum pedido ainda',
+                style: TextStyle(fontSize: 20, color: Colors.white70, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Quando clientes fizerem pedidos,\neles aparecerão aqui em tempo real',
+                style: TextStyle(color: Colors.white60, fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        );
+      }
+
+      return ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: orders.length,
+        itemBuilder: (context, index) {
+          final order = orders[index].data() as Map<String, dynamic>;
+          return _buildOrderCard(order, orders[index].id);
+        },
+      );
+    },
+  );
+}
 
   Widget _buildOrderCard(Map<String, dynamic> order, String orderId) {
     return Container(
@@ -609,11 +780,63 @@ class _OwnerHomePageImprovedState extends State<OwnerHomePageImproved>
   }
 
   void _showScanWaiterQRDialog() {
-    //Implementar scanner de QR
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Scanner de QR em desenvolvimento')),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          appBar: AppBar(title: const Text('Escanear QR Garçom')),
+          body: MobileScanner(
+            onDetect: (capture) {
+              final List<Barcode> barcodes = capture.barcodes;
+              for (final barcode in barcodes) {
+                if (barcode.rawValue != null) {
+                  _addWaiterFromQR(barcode.rawValue!);
+                  Navigator.pop(context);
+                  break;
+                }
+              }
+            },
+          ),
+        ),
+      ),
     );
   }
+
+  // Função auxiliar para adicionar garçom do QR (assumindo que QR tem ID do garçom)
+Future<void> _addWaiterFromQR(String qrData) async {
+  try {
+    // qrData deve ser o userId do garçom (ex: do QR Code gerado para ele)
+    final userData = await _authService.getUserData(qrData);
+    if (userData == null || userData['role'] != 'garcom') {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('QR inválido ou não é um garçom')),
+      );
+      return;
+    }
+
+    // Adiciona o garçom ao estabelecimento
+    await _firestore
+        .collection('establishments')
+        .doc(_establishmentId)
+        .collection('waiters')
+        .doc(qrData)  // Usa o userId como ID
+        .set({
+          'name': userData['name'],
+          'phone': userData['phoneNumber'],
+          'email': userData['email'],
+          'addedAt': FieldValue.serverTimestamp(),
+        });
+      if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Garçom adicionado com sucesso!'), backgroundColor: Colors.green),
+    );
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Erro ao adicionar garçom: $e'), backgroundColor: Colors.red),
+    );
+  }
+}
 
   Future<void> _removeWaiter(String waiterId) async {
     await _firestore

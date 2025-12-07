@@ -26,11 +26,23 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        manifestPlaceholders["appAuthQuotaEnabled"] = "false"
     }
 
     buildTypes {
         release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             signingConfig = signingConfigs.getByName("debug")
+            manifestPlaceholders["appAuthQuotaEnabled"] = "false"
+        }
+        debug {
+            manifestPlaceholders["appAuthQuotaEnabled"] = "false"
         }
     }
 }

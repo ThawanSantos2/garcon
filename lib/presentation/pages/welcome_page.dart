@@ -1,12 +1,12 @@
-// ignore_for_file: unused_field, use_super_parameters, unused_import
+// welcome_page.dart  ← VERSÃO CORRIGIDA (mantém tudo, só conserta o bug)
+
+// ignore_for_file: unused_import, use_super_parameters
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:garcon/presentation/pages/login_page_improved.dart';
-import '../../services/auth_service.dart';
+import 'package:garcon/services/auth_service.dart';
 import '../config/theme_config.dart';
-
 
 class WelcomePage extends StatefulWidget {
   const WelcomePage({Key? key}) : super(key: key);
@@ -16,45 +16,39 @@ class WelcomePage extends StatefulWidget {
 }
 
 class _WelcomePageState extends State<WelcomePage> {
-  final _authService = AuthService();
   bool _isChecking = true;
-  bool _isFirstTime = true;
 
   @override
   void initState() {
     super.initState();
-    _checkIfFirstTime();
+    _checkUser();
   }
 
-  Future<void> _checkIfFirstTime() async {
-    try {
-      // Verificar se já tem usuário logado
-      final currentUser = FirebaseAuth.instance.currentUser;
-      
-      if (currentUser != null) {
-        // Usuário já tem sessão ativa, vai para home
-        if (mounted) {
-          Navigator.pushReplacementNamed(context, '/home');
-        }
-      } else {
-        // Verificar no SharedPreferences se foi primeira vez
-        final prefs = await _getSharedPrefs();
-        final hasVisited = prefs?.getBool('has_visited') ?? false;
-        
-        setState(() {
-          _isFirstTime = !hasVisited;
-          _isChecking = false;
-        });
-      }
-    } catch (e) {
+  Future<void> _checkUser() async {
+    // Pequena pausa pra garantir que o Firebase Auth terminou de restaurar a sessão
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    final user = FirebaseAuth.instance.currentUser;
+
+  if (user != null && mounted) {
+      // Pega o role do Firestore
+      final authService = AuthService();
+      final data = await authService.getUserData(user.uid);
+      final role = data?['role'] as String? ?? 'cliente';
+
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/home/$role',
+        (route) => false,
+      );
+      return;
+    }
+
+    // Se chegou aqui = não está logado ou sessão expirou
+    if (mounted) {
       setState(() => _isChecking = false);
     }
-  }
-
-  Future<dynamic> _getSharedPrefs() async {
-    // Retorna shared_preferences instance
-    // Implementado no app principal
-    return null;
   }
 
   @override
@@ -70,14 +64,7 @@ class _WelcomePageState extends State<WelcomePage> {
       );
     }
 
-    if (_isFirstTime) {
-      return _buildFirstTimeScreen();
-    } else {
-      return _buildLoginScreen();
-    }
-  }
-
-  Widget _buildFirstTimeScreen() {
+    // Tela normal de boas-vindas (igual você já tinha)
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(gradient: GarconTheme.primaryGradient),
@@ -87,7 +74,6 @@ class _WelcomePageState extends State<WelcomePage> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Logo grande
                 Container(
                   width: 120,
                   height: 120,
@@ -96,73 +82,50 @@ class _WelcomePageState extends State<WelcomePage> {
                     color: Colors.white.withValues(alpha: 0.15),
                     border: Border.all(color: Colors.white, width: 3),
                   ),
-                  child: const Icon(
-                    Icons.restaurant,
-                    size: 70,
-                    color: Colors.white,
-                  ),
+                  child: const Icon(Icons.restaurant, size: 70, color: Colors.white),
                 ),
                 const SizedBox(height: 32),
-                
                 const Text(
                   'Bem-vindo ao Garçon!',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
-                
                 const Text(
                   'Que bom te ter conosco!\nRevolucione seu restaurante',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.white70,
-                  ),
+                  style: TextStyle(fontSize: 16, color: Colors.white70),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 48),
 
-                // Botão Login
                 SizedBox(
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/login');
-                    },
+                    onPressed: () => Navigator.pushNamed(context, '/login'),
                     icon: const Icon(Icons.login),
                     label: const Text('Já Tenho Conta'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
                       foregroundColor: const Color(0xFF0047AB),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
 
-                // Botão Registrar
                 SizedBox(
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/register');
-                    },
+                    onPressed: () => Navigator.pushNamed(context, '/register'),
                     icon: const Icon(Icons.person_add),
                     label: const Text('Primeira Vez Aqui'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white.withValues(alpha: 0.2),
                       foregroundColor: Colors.white,
                       side: const BorderSide(color: Colors.white, width: 2),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ),
@@ -172,9 +135,5 @@ class _WelcomePageState extends State<WelcomePage> {
         ),
       ),
     );
-  }
-
-  Widget _buildLoginScreen() {
-    return const LoginPageImproved();
   }
 }

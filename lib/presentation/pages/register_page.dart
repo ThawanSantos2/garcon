@@ -205,19 +205,28 @@ class _RegisterPageState extends State<RegisterPage> {
       phone = _ownerPhoneController.text;
     }
 
-    await _firestore.collection('users').doc(userId).set({
-      'uid': userId,
-      'name': name,
-      'email': email,
-      'phoneNumber': phone,
-      'role': _selectedRole,
-      'restaurantName': _selectedRole == 'estabelecimento' ? _ownerRestaurantNameController.text : null,
-      'address': _selectedRole == 'estabelecimento' ? _ownerAddressController.text : null,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-      'isActive': true,
-      'establishmentId': null,
-    });
+    // Para cliente e garçom: cadastro normal
+    if (_selectedRole != 'estabelecimento') {
+      await _firestore.collection('users').doc(userId).set({
+        'uid': userId,
+        'name': name,
+        'email': email,
+        'phoneNumber': phone,
+        'role': _selectedRole,
+        'isActive': true,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      return;
+    }
+
+    // PARA ESTABELECIMENTO: usa a função especial do AuthService
+    await _authService.registerEstablishmentWithPhone(
+      name: name,
+      phoneNumber: phone,
+      restaurantName: _ownerRestaurantNameController.text,
+      address: _ownerAddressController.text,
+      email: email,
+    );
   }
 
   String _formatPhoneNumber(String phone) {
@@ -248,7 +257,24 @@ class _RegisterPageState extends State<RegisterPage> {
           gradient: GarconTheme.primaryGradient,
         ),
         child: SafeArea(
-          child: _buildContent(),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SizedBox(
+                height: constraints.maxHeight,
+                child: SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                    child: IntrinsicHeight(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: _buildContent(),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
         ),
       ),
     );

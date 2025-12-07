@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/rendering.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
@@ -34,6 +35,61 @@ class AuthService {
       return userCredential;
     } on FirebaseAuthException catch (e) {
       throw Exception('Erro de login: ${e.message}');
+    }
+  }
+
+  // ==========================================
+  // CADASTRO COMPLETO DE ESTABELECIMENTO (COM TELEFONE + SMS)
+  // ==========================================
+
+  Future<void> registerEstablishmentWithPhone({
+    required String name,
+    required String phoneNumber,
+    required String restaurantName,
+    required String address,
+    required String email,
+  }) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) throw Exception('Usuário não autenticado');
+
+      final userId = user.uid;
+
+      // 1. Criar o estabelecimento
+      final establishmentRef = _firestore.collection('establishments').doc();
+      final establishmentId = establishmentRef.id;
+
+      await establishmentRef.set({
+        'name': restaurantName,
+        'address': address,
+        'ownerId': userId,
+        'ownerName': name,
+        'ownerEmail': email.isEmpty ? null : email,
+        'ownerPhone': phoneNumber,
+        'createdAt': FieldValue.serverTimestamp(),
+        'isActive': true,
+      });
+
+      // 2. Atualizar o documento do usuário com establishmentId
+      await _firestore.collection('users').doc(userId).set({
+        'uid': userId,
+        'name': name,
+        'email': email.isEmpty ? null : email,
+        'phoneNumber': phoneNumber,
+        'role': 'estabelecimento',
+        'restaurantName': restaurantName,
+        'address': address,
+        'establishmentId': establishmentId,  // AQUI ESTÁ O QUE IMPORTA!
+        'isActive': true,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      // Salvar sessão de 7 dias
+      await _saveLoginSession(userId);
+    } catch (e) {
+      debugPrint('Erro ao criar estabelecimento: $e');
+      rethrow;
     }
   }
 

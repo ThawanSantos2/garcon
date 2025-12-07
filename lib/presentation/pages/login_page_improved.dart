@@ -1,9 +1,10 @@
-// ignore_for_file: use_super_parameters
+// ignore_for_file: use_super_parameters, unused_import
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:garcon/services/auth_service.dart';
 import '../config/theme_config.dart';
+import './../../main.dart';
 
 class LoginPageImproved extends StatefulWidget {
   const LoginPageImproved({Key? key}) : super(key: key);
@@ -93,10 +94,16 @@ class _LoginPageImprovedState extends State<LoginPageImproved> {
           final sessionValid = await _requestPhoneVerification();
           if (sessionValid) {
             if (!mounted) return; 
-            Navigator.pushReplacementNamed(context, '/home');
+                    Navigator.of(context).pushNamedAndRemoveUntil(
+        '/home/$_selectedRole',
+        (route) => false,
+        );
           }
         } else {
-          Navigator.pushReplacementNamed(context, '/home');
+                  Navigator.of(context).pushNamedAndRemoveUntil(
+        '/home/$_selectedRole',
+        (route) => false,
+        );
         }
       }
     } on FirebaseAuthException catch (e) {
@@ -159,7 +166,10 @@ class _LoginPageImprovedState extends State<LoginPageImproved> {
       await _authService.signInWithPhoneAuthCredential(credential);
 
       if (mounted) {
-        Navigator.pushReplacementNamed(context, '/home');
+       Navigator.of(context).pushNamedAndRemoveUntil(
+        '/home/$_selectedRole',
+        (route) => false,
+        );
       }
     } on FirebaseAuthException catch (e) {
       setState(() {
@@ -255,13 +265,13 @@ class _LoginPageImprovedState extends State<LoginPageImproved> {
 
   @override
   Widget build(BuildContext context) {
-  return PopScope(
-    canPop: _loginStep == 0,
-    onPopInvokedWithResult: (didPop, result) {
-      if (!didPop && _loginStep > 0) {
-        setState(() => _loginStep = 0);
-      }
-    },
+    return PopScope(
+      canPop: _loginStep == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _loginStep > 0) {
+          setState(() => _loginStep = 0);
+        }
+      },
       child: Scaffold(
         appBar: _loginStep > 0
             ? AppBar(
@@ -276,7 +286,25 @@ class _LoginPageImprovedState extends State<LoginPageImproved> {
         body: Container(
           decoration: BoxDecoration(gradient: GarconTheme.primaryGradient),
           child: SafeArea(
-            child: _buildContent(),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SizedBox(
+                  height: constraints.maxHeight,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                      child: IntrinsicHeight(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24.0),
+                          child: _buildContent(),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
         ),
       ),

@@ -1,8 +1,8 @@
+// splash_page.dart → versão corrigida (sempre vai para /welcome)
+
 // ignore_for_file: unused_import, use_super_parameters
 
 import 'package:flutter/material.dart';
-import 'package:garcon/main.dart';
-import 'package:provider/provider.dart';
 import 'package:lottie/lottie.dart';
 
 class SplashPage extends StatefulWidget {
@@ -24,26 +24,17 @@ class _SplashPageState extends State<SplashPage>
       vsync: this,
     )..forward();
 
-    _navigateAfterDelay();
+    // Sempre vai para /welcome depois de 3 segundos
+    _navigateToWelcome();
   }
 
-  void _navigateAfterDelay() async {
+  void _navigateToWelcome() async {
     await Future.delayed(const Duration(seconds: 3));
 
     if (!mounted) return;
 
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    await authProvider.checkAuthStatus();
-
-    if (!mounted) return;
-
-    if (authProvider.isAuthenticated && authProvider.userRole != null) {
-      // Navega para a home baseada no role
-      Navigator.of(context).pushReplacementNamed('/home/${authProvider.userRole}');
-    } else {
-      // Vai para login
-      Navigator.of(context).pushReplacementNamed('/login');
-    }
+    // Força redirecionamento para /welcome, não importa o estado de autenticação
+    Navigator.of(context).pushReplacementNamed('/welcome');
   }
 
   @override
@@ -71,14 +62,13 @@ class _SplashPageState extends State<SplashPage>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               ScaleTransition(
-                scale: Tween<double>(begin: 0.5, end: 1.0)
-                    .animate(_controller),
+                scale: Tween<double>(begin: 0.5, end: 1.0).animate(_controller),
                 child: Container(
                   width: 120,
                   height: 120,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha:0.1),
+                    color: Colors.white.withValues(alpha: 0.1),
                     border: Border.all(color: Colors.white, width: 2),
                   ),
                   child: const Icon(
@@ -90,21 +80,20 @@ class _SplashPageState extends State<SplashPage>
               ),
               const SizedBox(height: 24),
               FadeTransition(
-                opacity: Tween<double>(begin: 0, end: 1)
-                    .animate(_controller),
+                opacity: Tween<double>(begin: 0.0, end: 1.0).animate(_controller),
                 child: const Text(
                   'Garçon',
                   style: TextStyle(
                     fontSize: 48,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
+                    letterSpacing: 1.2,
                   ),
                 ),
               ),
               const SizedBox(height: 12),
               FadeTransition(
-                opacity: Tween<double>(begin: 0, end: 1)
-                    .animate(_controller),
+                opacity: Tween<double>(begin: 0.0, end: 1.0).animate(_controller),
                 child: const Text(
                   'Gerenciamento Inteligente de Restaurantes',
                   textAlign: TextAlign.center,
