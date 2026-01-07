@@ -1,7 +1,8 @@
-// ignore_for_file: unused_field, unused_local_variable
+// ignore_for_file: unused_field, unused_local_variable, unnecessary_cast
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:typed_data';
 
@@ -85,15 +86,16 @@ class FirebaseService {
     }
   }
 
-  Future<Map<String, dynamic>?> getEstablishmentData(
-    String establishmentId,
-  ) async {
+  Future<Map<String, dynamic>?> getEstablishmentData(String establishmentId) async {
     try {
-      final doc = await _firestore
-          .collection('establishments')
-          .doc(establishmentId)
-          .get();
-      return doc.data();
+      final doc = await _firestore.collection('establishments').doc(establishmentId).get();
+      if (!doc.exists) {
+        return null;  // Or throw if preferred
+      }
+      return {
+        ...?doc.data(),  // Spread existing data (handles null safely)
+        'id': doc.id,    // Always set 'id' to doc.id for reliability
+      };
     } catch (e) {
       throw Exception('Erro ao obter dados do estabelecimento: $e');
     }
@@ -595,6 +597,34 @@ class FirebaseService {
         .snapshots();
   }
 
+    // ==========================================
+  // VERIFICAR SE O USUÁRIO TEM SESSÃO ATIVA
+  // ==========================================
+  Future<Map<String, dynamic>?> getActiveSession(String userId) async {
+    try {
+      final snapshot = await _firestore
+          .collectionGroup('sessions')
+          .where('customerId', isEqualTo: userId)
+          .where('status', isEqualTo: 'active')  // ou 'open', 'ongoing' — use o que você usa
+          .orderBy('createdAt', descending: true)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isEmpty) return null;
+
+      final sessionDoc = snapshot.docs.first;
+      final sessionData = sessionDoc.data() as Map<String, dynamic>;
+
+      // Adiciona o ID do documento (útil)
+      sessionData['sessionDocId'] = sessionDoc.id;
+
+      return sessionData;
+    } catch (e) {
+      debugPrint('Erro ao buscar sessão ativa: $e');
+      return null;
+    }
+  }
+
   // ==========================================
   // ESTATÍSTICAS
   // ==========================================
@@ -797,4 +827,305 @@ class FirebaseService {
       throw Exception('Erro ao deletar arquivo: $e');
     }
   }
+
+// ==========================================
+// AVALIAÇÕES (RATINGS)
+// ==========================================
+
+/// Criar/Salvar uma avaliação
+Future<void> createRating({
+  required String establishmentId,
+  required String userId,
+  required String orderId,
+  required int restaurantRating,
+  required int? waiterRating,
+  required String? waiterName,
+  String? comment,
+}) async {
+  try {
+    final ratingId = _uuid.v4();
+
+    await _firestore.collection('ratings').doc(ratingId).set({
+      'id': ratingId,
+      'establishmentId': establishmentId,
+      'userId': userId,
+      'orderId': orderId,
+      'restaurantRating': restaurantRating,
+      'waiterRating': waiterRating,
+      'waiterName': waiterName,
+      'comment': comment ?? '',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    // Atualizar média de avaliação do estabelecimento
+    await _updateEstablishmentRating(establishmentId);
+
+    // Se houver avaliação do garçom, atualizar também
+    if (waiterRating != null && waiterName != null) {
+      await _updateWaiterRating(establishmentId, waiterName);
+    }
+  } catch (e) {
+    throw Exception('Erro ao salvar avaliação: $e');
+  }
+}
+
+/// Atualizar média de avaliação do estabelecimento
+Future<void> _updateEstablishmentRating(String establishmentId) async {
+  try {
+    final ratings = await _firestore
+        .collection('ratings')
+        .where('establishmentId', isEqualTo: establishmentId)
+        .get();
+
+    if (ratings.docs.isEmpty) return;
+
+    double totalRating = 0;
+    for (var doc in ratings.docs) {
+      totalRating += (doc['restaurantRating'] as num).toDouble();
+    }
+
+    final averageRating = totalRating / ratings.docs.length;
+
+    await _firestore.collection('establishments').doc(establishmentId).update({
+      'averageRating': averageRating,
+      'totalRatings': ratings.docs.length,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    debugPrint('Erro ao atualizar avaliação do estabelecimento: $e');
+  }
+}
+
+/// Atualizar média de avaliação do garçom
+Future<void> _updateWaiterRating(
+    String establishmentId, String waiterName) async {
+  try {
+    final ratings = await _firestore
+        .collection('ratings')
+        .where('establishmentId', isEqualTo: establishmentId)
+        .where('waiterName', isEqualTo: waiterName)
+        .get();
+
+    if (ratings.docs.isEmpty) return;
+
+    double totalRating = 0;
+    int count = 0;
+
+    for (var doc in ratings.docs) {
+      if (doc['waiterRating'] != null) {
+        totalRating += (doc['waiterRating'] as num).toDouble();
+        count++;
+      }
+    }
+
+    if (count == 0) return;
+
+    final averageRating = totalRating / count;
+
+    // Atualizar garçom
+    await _firestore
+        .collection('establishments')
+        .doc(establishmentId)
+        .collection('waiters')
+        .where('name', isEqualTo: waiterName)
+        .get()
+        .then((snapshot) {
+      for (var doc in snapshot.docs) {
+        doc.reference.update({
+          'averageRating': averageRating,
+          'totalRatings': count,
+        });
+      }
+    });
+  } catch (e) {
+    debugPrint('Erro ao atualizar avaliação do garçom: $e');
+  }
+}
+
+/// Obter avaliações de um estabelecimento
+Future<List<Map<String, dynamic>>> getEstablishmentRatings(
+    String establishmentId) async {
+  try {
+    final snapshot = await _firestore
+        .collection('ratings')
+        .where('establishmentId', isEqualTo: establishmentId)
+        .orderBy('createdAt', descending: true)
+        .get();
+
+    return snapshot.docs
+        .map((doc) => {...doc.data(), 'id': doc.id})
+        .toList();
+  } catch (e) {
+    throw Exception('Erro ao obter avaliações: $e');
+  }
+}
+
+/// Stream de avaliações de um estabelecimento
+Stream<QuerySnapshot> getEstablishmentRatingsStream(
+    String establishmentId) {
+  return _firestore
+      .collection('ratings')
+      .where('establishmentId', isEqualTo: establishmentId)
+      .orderBy('createdAt', descending: true)
+      .snapshots();
+}
+
+/// Obter avaliações do usuário
+Future<List<Map<String, dynamic>>> getUserRatings(String userId) async {
+  try {
+    final snapshot = await _firestore
+        .collection('ratings')
+        .where('userId', isEqualTo: userId)
+        .orderBy('createdAt', descending: true)
+        .get();
+
+    return snapshot.docs
+        .map((doc) => {...doc.data(), 'id': doc.id})
+        .toList();
+  } catch (e) {
+    throw Exception('Erro ao obter avaliações: $e');
+  }
+}
+
+/// Obter histórico de pedidos anterior (últimos 30 dias)
+Future<List<Map<String, dynamic>>> getClientOrderHistory(
+  String clientId,
+  String establishmentId,
+) async {
+  try {
+    final snapshot = await _firestore
+        .collection('orders')
+        .where('customerId', isEqualTo: clientId)
+        .where('establishmentId', isEqualTo: establishmentId)
+        .where('createdAt',
+            isGreaterThan: Timestamp.fromDate(
+                DateTime.now().subtract(const Duration(days: 30))))
+        .orderBy('createdAt', descending: true)
+        .get();
+
+    return snapshot.docs
+        .map((doc) => {...doc.data(), 'id': doc.id})
+        .toList();
+  } catch (e) {
+    throw Exception('Erro ao obter histórico: $e');
+  }
+}
+
+/// Verificar se usuário já avaliou um pedido
+Future<bool> hasUserRatedOrder(String orderId, String userId) async {
+  try {
+    final snapshot = await _firestore
+        .collection('ratings')
+        .where('orderId', isEqualTo: orderId)
+        .where('userId', isEqualTo: userId)
+        .get();
+
+    return snapshot.docs.isNotEmpty;
+  } catch (e) {
+    return false;
+  }
+}
+
+  // ==========================================
+  // ATUALIZAR SESSÃO DO CLIENTE
+  // ==========================================
+  Future<void> updateSession(String sessionId, Map<String, dynamic> data) async {
+    try {
+      data['updatedAt'] = FieldValue.serverTimestamp();
+      await _firestore
+          .collectionGroup('sessions')  // collectionGroup porque sessions é subcoleção
+          .where('id', isEqualTo: sessionId)
+          .get()
+          .then((snapshot) {
+        if (snapshot.docs.isNotEmpty) {
+          snapshot.docs.first.reference.update(data);
+        }
+      });
+    } catch (e) {
+      throw Exception('Erro ao atualizar sessão: $e');
+    }
+  }
+
+// ==========================================
+// DELETAR SESSÃO DO CLIENTE
+// ==========================================
+
+Future<void> deleteCustomerSession({
+  required String establishmentId,
+  required String sessionId,
+}) async {
+  try {
+    await _firestore
+        .collection('establishments')
+        .doc(establishmentId)
+        .collection('sessions')
+        .doc(sessionId)
+        .delete();
+  } catch (e) {
+    throw Exception('Erro ao deletar sessão: $e');
+  }
+}
+
+// ==========================================
+// LIBERAR MESA
+// ==========================================
+
+Future<void> freeTable({
+  required String establishmentId,
+  required String tableId,
+}) async {
+  try {
+    await _firestore
+        .collection('establishments')
+        .doc(establishmentId)
+        .collection('tables')
+        .doc(tableId)
+        .update({
+          'isOccupied': false,
+          'currentCustomerId': null,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+  } catch (e) {
+    throw Exception('Erro ao liberar mesa: $e');
+  }
+}
+
+Future<void> updateWaiterAverageRating(String waiterId) async {
+  try {
+    final ratings = await _firestore
+        .collection('ratings')
+        .where('waiterName', isEqualTo: waiterId)
+        .where('waiterRating', isNotEqualTo: null)
+        .get();
+
+    if (ratings.docs.isEmpty) return;
+
+    double sum = 0;
+    int count = 0;
+
+    for (var doc in ratings.docs) {
+      final rating = doc['waiterRating'];
+      if (rating != null) {
+        sum += (rating as num).toDouble();
+        count++;
+      }
+    }
+
+    if (count == 0) return;
+
+    final average = sum / count;
+
+    // ✅ Atualizar no documento do usuário garçom
+    await _firestore.collection('users').doc(waiterId).update({
+      'averageRating': average,
+      'totalRatings': count,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    debugPrint('✅ Rating do garçom $waiterId atualizado: $average');
+  } catch (e) {
+    debugPrint('❌ Erro ao atualizar rating: $e');
+  }
+}
+
 }

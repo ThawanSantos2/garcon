@@ -1,6 +1,8 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
+    id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
     id("dev.flutter.flutter-gradle-plugin")
     // O plugin do Google Services já está sendo aplicado via FlutterFire CLI
     // Não precisa declarar aqui de novo
@@ -33,6 +35,9 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
+            firebaseCrashlytics {
+            mappingFileUploadEnabled = true
+            }
             isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

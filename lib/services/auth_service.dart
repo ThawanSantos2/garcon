@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/rendering.dart';
+import 'package:garcon/services/notification_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
@@ -28,6 +29,15 @@ class AuthService {
         email: email,
         password: password,
       );
+
+      // Salvar token FCM
+      final token = await NotificationService().getUserFCMToken();
+      if (token != null) {
+        await NotificationService().saveFCMTokenToFirestore(
+          userCredential.user!.uid,
+          token,
+        );
+      }
 
       // Salvar sessão por 7 dias
       await _saveLoginSession(userCredential.user!.uid);
@@ -147,7 +157,16 @@ class AuthService {
   ) async {
     try {
       final userCredential = await _auth.signInWithCredential(credential);
-      
+
+      // Salvar token FCM (agora aqui também)
+      final token = await NotificationService().getUserFCMToken();
+      if (token != null) {
+        await NotificationService().saveFCMTokenToFirestore(
+          userCredential.user!.uid,
+          token,
+        );
+      }
+
       // Salvar sessão por 7 dias
       await _saveLoginSession(userCredential.user!.uid);
       
@@ -269,14 +288,23 @@ class AuthService {
   }
 
   // Obter dados do usuário
-  Future<Map<String, dynamic>?> getUserData(String userId) async {
-    try {
-      final doc = await _firestore.collection('users').doc(userId).get();
-      return doc.data();
-    } catch (e) {
-      throw Exception('Erro ao obter dados do usuário: $e');
-    }
+Future<Map<String, dynamic>?> getUserData(String userId) async {
+  try {
+    final doc = await _firestore.collection('users').doc(userId).get();
+
+    if (!doc.exists) return null;
+
+    final data = doc.data();
+    if (data == null) return null;
+
+    return data;
+  } catch (e, stackTrace) {
+    debugPrint('Erro ao obter dados do usuário: $e');
+    debugPrint(stackTrace.toString());
+    return null; // ✅ NUNCA lance exception aqui
   }
+}
+
 
   // Verificar se email já existe
   Future<bool> emailExists(String email) async {
